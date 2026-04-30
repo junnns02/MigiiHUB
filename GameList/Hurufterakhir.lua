@@ -1,3 +1,8 @@
+-- // ========================================== \\ --
+-- ||        MIGII-HUB SCRIPT - HURUF TERAKHIR       || --
+-- ||       CREATOR BY : JUNNNS AKA MIGII HUB     || --
+-- ||                   POWERED ©2026                      || --
+-- \\ ========================================== // --
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local VIM = game:GetService("VirtualInputManager")
@@ -305,15 +310,22 @@ if GameEndRemote then
 end
 
 -- ==========================================
--- MULTI-SOURCE DICTIONARY ENGINE 
+-- SINGLE-SOURCE DICTIONARY ENGINE (LITE)
 -- ==========================================
 task.spawn(function()
-    UpdateIndicator("Memuat Multi-Database Kamus...", Color3.fromRGB(255, 200, 0), false)
+    UpdateIndicator("Memuat Kamus MigiiHUB...", Color3.fromRGB(0, 200, 255), false)
     for i = 97, 122 do FastDict[string.char(i)] = {} end
     local loadedSet = {} 
 
     local function addWord(w)
-        if string.find(w, "-") or string.find(w, " ") then return end
+        -- Skip kata yang pakai spasi
+        if string.find(w, " ") then return end
+        
+        -- Sederhanakan kata ber-strip (contoh: "laki-laki" menjadi "laki")
+        if string.find(w, "-") then
+            w = string.split(w, "-")[1]
+        end
+
         local cleanWord = w:lower():gsub("[^a-z]", "")
         if #cleanWord > 1 and not loadedSet[cleanWord] then
             local firstChar = cleanWord:sub(1, 1)
@@ -325,50 +337,22 @@ task.spawn(function()
         end
     end
 
-    local s1, res1 = pcall(function() return game:HttpGet("https://raw.githubusercontent.com/hanahaneull/pc-sambungkata/master/kbbi.json") end)
-    if s1 and res1 then
-        local ds, data = pcall(function() return HttpService:JSONDecode(res1) end)
-        if ds and type(data) == "table" then for _, v in pairs(data) do if type(v) == "string" then addWord(v) end end end
-    end
-
-    UpdateIndicator("Memuat CSV Github...", Color3.fromRGB(255, 150, 0), false)
-    local s2, res2 = pcall(function() return game:HttpGet("https://raw.githubusercontent.com/Hidayathamir/kata-kbbi-github/refs/heads/main/kbbi.csv") end)
-    if s2 and res2 then for word in res2:gmatch("[^,\r\n]+") do addWord(word) end end
-
-    UpdateIndicator("Menarik Data A-Z (Background)...", Color3.fromRGB(0, 200, 255), false)
-    for i = 97, 122 do
-        task.spawn(function()
-            if not isRunning then return end 
-            local letter = string.char(i)
-            local s3, res3 = pcall(function() return game:HttpGet("https://raw.githubusercontent.com/rizaumami/kbbi/master/teks/hasil_akhir/" .. letter .. ".txt") end)
-            if s3 and res3 then for word in res3:gmatch("[^\r\n]+") do addWord(word) end end
-            UpdateIndicator(nil, nil, nil) 
-        end)
-        task.wait(0.05) 
-    end
-
-    local extraWords = {
-        "aku","akan","ada","apa","atas","atau","anak","ambil","baru","bisa","buku","baik",
-        "banyak","bukan","buat","bawa","cinta","coba","dalam","dari","dengan","engkau",
-        "emas","fokus","gajah","hari","ikan","juga","kita","lama","makan","nasi","orang",
-        "pasti","rasa","satu","tahu","uang","waktu","yakin","zaman","axel","axis","axle",
-        "axolotl","axon","axing","axial","extra","extreme","exit","exam","exist","execute",
-        "export","express","explore","ixora","icon","idea","ideal","idiot","oxford","oksigen",
-        "oasis","opera","orbit","uxui","ungu","ujian","utama","utara","xenon","xylem","xray",
-        "xerox","xylophone","xenia","xilem","queen","qatar","quran","query","quota","qurban",
-        "quote","zebra","zombie","zodiac","zoom","zero","zona","zakat","zamrud","zodiak",
-        "zonasi","zikir","ziarah","zaitun","zigot","zink","vibes","vampir","video","visual",
-        "viral","valid","vaksin","virus","vocal","volume","vakum","visa","vas","voli","vonis",
-        "vibrasi","woles","wkwk","wajib","wakil","wanita","warga","warna","wabah","anjay",
-        "anjir","baper","caper","mager","kepo","gabut","bestie","cuy","bro","enggan","engsel",
-        "engap","engkok","engkong","engkoh","engku","angka","angsa","angkut","angkat","anggur",
-        "anggun","angin","angkasa","anglo","anggar","angkit"
-    }
-    for _, w in ipairs(extraWords) do addWord(w) end
+    -- Load dari 1 link utama agar script ringan dan hemat RAM
+    local s1, res1 = pcall(function() 
+        return game:HttpGet("https://raw.githubusercontent.com/migii02/MigiiHUB/refs/heads/main/etc/wordlistKBBI.txt") 
+    end)
     
-    loadedSet = nil 
+    if s1 and res1 then
+        for word in res1:gmatch("[^\r\n]+") do 
+            addWord(word) 
+        end
+    else
+        UpdateIndicator("❌ Gagal memuat database!", Color3.fromRGB(255, 50, 50), false)
+    end
+
+    loadedSet = nil -- Bersihkan cache memori sementara
     task.wait(1.5)
-    UpdateIndicator("✅ Kamus Raksasa Siap!", Color3.fromRGB(0, 255, 150), false)
+    UpdateIndicator("✅ Kamus MigiiHUB Siap!", Color3.fromRGB(0, 255, 150), false)
     task.wait(2)
     UpdateIndicator("Menunggu giliran / permainan dimulai...", Color3.fromRGB(200, 200, 200), false)
 end)
@@ -944,4 +928,4 @@ ConfigSection:AddButton({Text = "❌ Tutup & Hapus Loader", Callback = function(
     if LocalPlayer:FindFirstChild("PlayerGui") then WipeUI(LocalPlayer.PlayerGui) end
 end})
 
-Window:Toast({Title = "MIGII HUB", Message = "Memuat Script Universal... \nSupport 6 Game!", Duration = 4, Type = "Success"})
+Window:Toast({Title = "MIGII HUB", Message = "Memuat Script Universal... ", Duration = 4, Type = "Success"})
