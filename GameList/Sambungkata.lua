@@ -1,3 +1,9 @@
+-- // ========================================== \\ --
+-- ||        MIGII-HUB SCRIPT - SAMBUNG KATA       || --
+-- ||       CREATOR BY : JUNNNS AKA MIGII HUB     || --
+-- ||                   POWERED ©2026                      || --
+-- \\ ========================================== // --
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local VIM = game:GetService("VirtualInputManager")
@@ -12,6 +18,10 @@ local RemotesFolder = ReplicatedStorage:WaitForChild("Remotes", 10)
 local SubmitWordRemote = RemotesFolder and RemotesFolder:FindFirstChild("SubmitWord")
 local GameStartRemote = RemotesFolder and RemotesFolder:FindFirstChild("GameStart")
 local GameEndRemote = RemotesFolder and RemotesFolder:FindFirstChild("GameEnd")
+local WordUpdateRemote = RemotesFolder and RemotesFolder:FindFirstChild("WordUpdate")
+local UpdateCurrentWordRemote = RemotesFolder and RemotesFolder:FindFirstChild("UpdateCurrentWord")
+local PlayerCorrectRemote = RemotesFolder and RemotesFolder:FindFirstChild("PlayerCorrect")
+local PlayerHitRemote = RemotesFolder and RemotesFolder:FindFirstChild("PlayerHit")
 
 -- ==========================================
 -- 0. DETEKSI NAMA GAME & SETUP FOLDER
@@ -56,6 +66,8 @@ local UsedWords = {}
 local TotalKamusKata = 0
 local HardEndings = {"x", "q", "z", "v", "w", "f", "ng", "ny", "ax", "ex", "ix", "ox", "ux"}
 local isTypingManual = false 
+local serverPrefixData = "" 
+local instantFailFlag = false 
 
 local function GetUsedCount()
     local count = 0
@@ -64,7 +76,24 @@ local function GetUsedCount()
 end
 
 -- ==========================================
--- 1. UI LIVE MATCH INDICATOR 
+-- FUNGSI DEEP VISIBILITY
+-- ==========================================
+local function IsTrulyVisible(gui)
+    if not gui then return false end
+    local curr = gui
+    while curr do
+        if curr:IsA("GuiObject") then
+            if not curr.Visible then return false end
+        elseif curr:IsA("ScreenGui") or curr:IsA("BillboardGui") or curr:IsA("SurfaceGui") then
+            if not curr.Enabled then return false end
+        end
+        curr = curr.Parent
+    end
+    return true
+end
+
+-- ==========================================
+-- 1. UI LIVE MATCH INDICATOR (DIPERBESAR)
 -- ==========================================
 local targetGui = (gethui and gethui()) or CoreGui 
 local IndicatorGui = Instance.new("ScreenGui")
@@ -74,8 +103,8 @@ if not IndicatorGui.Parent then IndicatorGui.Parent = LocalPlayer:FindFirstChild
 IndicatorGui.Enabled = false 
 
 local InfoFrame = Instance.new("Frame")
-InfoFrame.Size = UDim2.new(0, 280, 0, 135) 
-InfoFrame.Position = UDim2.new(1, -290, 0, 20) 
+InfoFrame.Size = UDim2.new(0, 360, 0, 160) -- [PERBAIKAN] Ukuran panel diperbesar
+InfoFrame.Position = UDim2.new(1, -370, 0, 20) -- [PERBAIKAN] Digeser agar tidak menabrak layar HP
 InfoFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 InfoFrame.BackgroundTransparency = 0.2
 InfoFrame.Active = true 
@@ -96,7 +125,7 @@ InfoTitle.TextSize = 13
 InfoTitle.Parent = InfoFrame
 
 local InfoText = Instance.new("TextLabel")
-InfoText.Size = UDim2.new(1, -20, 1, -75)
+InfoText.Size = UDim2.new(1, -20, 1, -90) -- Disesuaikan
 InfoText.Position = UDim2.new(0, 10, 0, 25)
 InfoText.BackgroundTransparency = 1
 InfoText.Text = "Menunggu giliran..."
@@ -110,7 +139,7 @@ InfoText.Parent = InfoFrame
 
 local InfoStats = Instance.new("TextLabel")
 InfoStats.Size = UDim2.new(1, -20, 0, 20)
-InfoStats.Position = UDim2.new(0, 10, 1, -45)
+InfoStats.Position = UDim2.new(0, 10, 1, -65) -- Dinaikkan
 InfoStats.BackgroundTransparency = 1
 InfoStats.Text = "Kata: 0 | Terpakai: 0 | Sisa: 0"
 InfoStats.TextColor3 = Color3.fromRGB(150, 255, 150) 
@@ -121,15 +150,15 @@ InfoStats.TextXAlignment = Enum.TextXAlignment.Left
 InfoStats.Parent = InfoFrame
 
 local InfoSaran = Instance.new("TextLabel")
-InfoSaran.Size = UDim2.new(1, -20, 0, 20)
-InfoSaran.Position = UDim2.new(0, 10, 1, -25)
+InfoSaran.Size = UDim2.new(1, -20, 0, 40) -- [PERBAIKAN] Area teks dipertinggi agar cukup 2 baris
+InfoSaran.Position = UDim2.new(0, 10, 1, -45) -- Disesuaikan letaknya
 InfoSaran.BackgroundTransparency = 1
 InfoSaran.Text = "💡 Saran: -"
 InfoSaran.TextColor3 = Color3.fromRGB(255, 255, 100) 
 InfoSaran.TextWrapped = true
 InfoSaran.Font = Enum.Font.GothamMedium
 InfoSaran.TextSize = 11
-InfoSaran.TextYAlignment = Enum.TextYAlignment.Center
+InfoSaran.TextYAlignment = Enum.TextYAlignment.Top -- [PERBAIKAN] Rata atas agar kalau wrapping tidak numpuk
 InfoSaran.TextXAlignment = Enum.TextXAlignment.Left
 InfoSaran.Parent = InfoFrame
 
@@ -137,7 +166,7 @@ local function UpdateIndicator(text, color, saran)
     if SambungKataState.ShowIndicator then
         if text then InfoText.Text = text end
         if saran then 
-            InfoSaran.Text = "💡 Saran: " .. saran 
+            InfoSaran.Text = saran 
             InfoSaran.Visible = true
         elseif saran == false then
             InfoSaran.Visible = false
@@ -170,7 +199,7 @@ InfoFrame.InputEnded:Connect(function(input)
 end)
 
 -- ==========================================
--- PANEL MILLIONAIRE (FIXED: 8 SLOT UI)
+-- PANEL MILLIONAIRE 
 -- ==========================================
 local SuggestGui = Instance.new("ScreenGui")
 SuggestGui.Name = "MigiiSambungKataSuggestUI"
@@ -283,6 +312,121 @@ SuggestPanel.InputEnded:Connect(function(input)
 end)
 
 -- ==========================================
+-- FUNGSI BACA TEKS YANG LAGI DIKETIK 
+-- ==========================================
+local function GetCurrentTypedWord()
+    local currentLiveWord = ""
+    pcall(function()
+        local ws = LocalPlayer.PlayerGui.MatchUI.BottomUI.TopUI.WordSubmit
+        if IsTrulyVisible(ws) then
+            local frames = {}
+            for _, v in ipairs(ws:GetChildren()) do
+                if v:IsA("GuiObject") then table.insert(frames, v) end
+            end
+            table.sort(frames, function(a, b) return a.AbsolutePosition.X < b.AbsolutePosition.X end)
+            for _, w in ipairs(frames) do
+                local tl = w:IsA("TextLabel") and w or w:FindFirstChildWhichIsA("TextLabel", true)
+                if tl then
+                    currentLiveWord = currentLiveWord .. tostring(tl.Text):lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
+                end
+            end
+        end
+    end)
+    return currentLiveWord
+end
+
+-- ==========================================
+-- ENGINE KETIK & HAPUS 
+-- ==========================================
+local function SimulateTyping(text)
+    for i = 1, #text do
+        if not isRunning or instantFailFlag then break end 
+        local char = text:sub(i, i):upper()
+        local keyCode = Enum.KeyCode[char]
+        
+        if keyCode then
+            pcall(function()
+                VIM:SendKeyEvent(true, keyCode, false, game)
+                task.wait(0.01) 
+                VIM:SendKeyEvent(false, keyCode, false, game)
+            end)
+        end
+        
+        task.wait(SambungKataState.TypeSpeed) 
+    end
+end
+
+local function SimulateEnter()
+    pcall(function()
+        VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        task.wait(0.01)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+    end)
+end
+
+local function SimulateBackspace()
+    pcall(function()
+        local ws = LocalPlayer.PlayerGui:FindFirstChild("MatchUI")
+        local backBtn = nil
+        
+        if ws then
+            for _, v in ipairs(ws:GetDescendants()) do
+                if (v:IsA("ImageButton") or v:IsA("TextButton")) and IsTrulyVisible(v) then
+                    local name = v.Name:lower()
+                    if name:match("back") or name:match("del") or name:match("clear") or 
+                       (v.BackgroundColor3.R > 0.8 and v.BackgroundColor3.G < 0.2 and v.BackgroundColor3.B < 0.2) then
+                        backBtn = v
+                        break
+                    end
+                end
+            end
+        end
+
+        local currentText = GetCurrentTypedWord()
+        local loopCount = 0
+        local stuckCount = 0
+        
+        while #currentText > 0 and loopCount < 30 and isRunning do
+            loopCount = loopCount + 1
+            
+            if backBtn then
+                pcall(function()
+                    if firesignal then 
+                        firesignal(backBtn.MouseButton1Click)
+                        firesignal(backBtn.Activated)
+                    end
+                    if getconnections then
+                        for _, conn in pairs(getconnections(backBtn.MouseButton1Click)) do conn:Fire() end
+                        for _, conn in pairs(getconnections(backBtn.Activated)) do conn:Fire() end
+                        for _, conn in pairs(getconnections(backBtn.TouchTap)) do conn:Fire() end
+                    end
+                end)
+            end
+            
+            pcall(function()
+                VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+                task.wait(0.01)
+                VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+            end)
+            
+            task.wait(0.05) 
+            
+            local newText = GetCurrentTypedWord()
+            if newText == currentText then
+                stuckCount = stuckCount + 1
+                if stuckCount >= 4 then break end 
+            else
+                stuckCount = 0 
+            end
+            
+            currentText = newText
+        end
+    end)
+end
+
+HapusBtn.MouseButton1Click:Connect(function() SimulateBackspace() end)
+
+-- ==========================================
 -- PASSIVE REMOTE LISTENERS 
 -- ==========================================
 if GameStartRemote then
@@ -299,6 +443,40 @@ if GameEndRemote then
         if isRunning then UpdateIndicator("🛑 Match Selesai / Menunggu", Color3.fromRGB(255, 50, 50), false) end
     end)
 end
+
+if PlayerCorrectRemote then
+    PlayerCorrectRemote.OnClientEvent:Connect(function(playerName)
+        if isRunning then
+            isTypingManual = false 
+            serverPrefixData = ""  
+            local pName = tostring(playerName)
+            UpdateIndicator(nil, nil, "✅ Jawab Benar: " .. pName)
+        end
+    end)
+end
+
+if PlayerHitRemote then
+    PlayerHitRemote.OnClientEvent:Connect(function(playerName)
+        if isRunning then
+            local pName = tostring(playerName)
+            if pName == LocalPlayer.Name or pName == LocalPlayer.DisplayName then
+                instantFailFlag = true 
+            end
+        end
+    end)
+end
+
+local function ExtractPrefixFromServer(data)
+    if isRunning and type(data) == "string" then
+        local clean = data:lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
+        if #clean > 0 and #clean <= 5 then
+            serverPrefixData = clean
+        end
+    end
+end
+
+if UpdateCurrentWordRemote then UpdateCurrentWordRemote.OnClientEvent:Connect(ExtractPrefixFromServer) end
+if WordUpdateRemote then WordUpdateRemote.OnClientEvent:Connect(ExtractPrefixFromServer) end
 
 -- ==========================================
 -- SINGLE-SOURCE DICTIONARY ENGINE
@@ -347,7 +525,7 @@ local function GetSuggestions(prefix, limit)
             if #suggestions >= limit then break end
         end
     end
-    if #suggestions > 0 then return table.concat(suggestions, ", ") else return "Kosong/Habis" end
+    if #suggestions > 0 then return "💡 Saran: " .. table.concat(suggestions, ", ") else return "💡 Saran: Kosong/Habis" end
 end
 
 -- ==========================================
@@ -355,84 +533,63 @@ end
 -- ==========================================
 local function GetTurnAndPrefix()
     local isMyTurn = false
-    local prefix = ""
+    local prefix = serverPrefixData
 
     for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-        if (v.Name == "A" and v.Parent and v.Parent.Name:find("Row") and v.Visible and v.AbsoluteSize.X > 0) or
-           (v.Name == "CustomKeyboard" and v.Visible and v.AbsoluteSize.X > 0) then
-            isMyTurn = true
+        if (v.Name == "A" and v.Parent and v.Parent.Name:find("Row") and v.AbsoluteSize.X > 0) or
+           (v.Name == "CustomKeyboard" and v.AbsoluteSize.X > 0) then
+            if IsTrulyVisible(v) then
+                isMyTurn = true
+            end
         end
 
-        if v.Name == "CurrentLetterLabel" and v:IsA("TextLabel") and v.Visible then
-            local letter = string.gsub(v.Text, "<[^>]+>", "")
-            letter = letter:lower():gsub("[^a-z]", "")
-            if letter ~= "" then prefix = letter end
-        end
+        if prefix == "" then
+            if v.Name == "CurrentLetterLabel" and v:IsA("TextLabel") and IsTrulyVisible(v) then
+                local letter = string.gsub(v.Text, "<[^>]+>", "")
+                letter = letter:lower():gsub("[^a-z]", "")
+                if letter ~= "" then prefix = letter end
+            end
 
-        -- [PERBAIKAN: MENCEGAH HURUF DASAR TERPISAH BIKIN BOT BUTA]
-        if v:IsA("TextLabel") and v.Visible then
-            local cleanTxt = string.gsub(v.Text, "<[^>]+>", "")
-            local lowerTxt = cleanTxt:lower()
-            if lowerTxt:match("adalah:%s*([a-z]+)") then
-                prefix = lowerTxt:match("adalah:%s*([a-z]+)")
-            elseif lowerTxt:match("adalah:") and prefix == "" then
-                -- Jika "Hurufnya adalah:" pisah kotak sama huruf aslinya, cari di sebelah/parentnya
-                pcall(function()
-                    for _, sibling in ipairs(v.Parent:GetChildren()) do
-                        if sibling ~= v and sibling:IsA("TextLabel") then
-                            local sibTxt = sibling.Text:lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
-                            if #sibTxt > 0 and #sibTxt <= 5 then prefix = sibTxt; break end
+            if v:IsA("TextLabel") and IsTrulyVisible(v) then
+                local cleanTxt = string.gsub(v.Text, "<[^>]+>", "")
+                local lowerTxt = cleanTxt:lower()
+                if lowerTxt:match("adalah:%s*([a-z]+)") then
+                    prefix = lowerTxt:match("adalah:%s*([a-z]+)")
+                elseif lowerTxt:match("adalah:") and prefix == "" then
+                    pcall(function()
+                        for _, sibling in ipairs(v.Parent:GetChildren()) do
+                            if sibling ~= v and sibling:IsA("TextLabel") and IsTrulyVisible(sibling) then
+                                local sibTxt = sibling.Text:lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
+                                if #sibTxt > 0 and #sibTxt <= 5 then prefix = sibTxt; break end
+                            end
                         end
-                    end
-                end)
+                    end)
+                end
             end
         end
     end
 
-    -- [PERBAIKAN: GUNAKAN PATH AKURAT KAMU BUAT FALLBACK]
     if prefix == "" then
         pcall(function()
             local ws = LocalPlayer.PlayerGui.MatchUI.BottomUI.TopUI.WordSubmit
-            local frames = {}
-            for _, v in ipairs(ws:GetChildren()) do
-                if v:IsA("GuiObject") then table.insert(frames, v) end
-            end
-            table.sort(frames, function(a, b) return a.AbsolutePosition.X < b.AbsolutePosition.X end)
-            
-            -- AMBIL HURUF PERTAMA AJA BIAR GAK KECAMPUR KATA YANG SALAH TADI!
-            if #frames > 0 then
-                local tl = frames[1]:IsA("TextLabel") and frames[1] or frames[1]:FindFirstChildWhichIsA("TextLabel", true)
-                if tl then
-                    prefix = tostring(tl.Text):lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
+            if IsTrulyVisible(ws) then
+                local frames = {}
+                for _, v in ipairs(ws:GetChildren()) do
+                    if v:IsA("GuiObject") then table.insert(frames, v) end
+                end
+                table.sort(frames, function(a, b) return a.AbsolutePosition.X < b.AbsolutePosition.X end)
+                
+                if #frames > 0 then
+                    local tl = frames[1]:IsA("TextLabel") and frames[1] or frames[1]:FindFirstChildWhichIsA("TextLabel", true)
+                    if tl then
+                        prefix = tostring(tl.Text):lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
+                    end
                 end
             end
         end)
     end
 
     return isMyTurn, prefix
-end
-
--- ==========================================
--- FUNGSI BACA TEKS YANG LAGI DIKETIK
--- ==========================================
-local function GetCurrentTypedWord()
-    local currentLiveWord = ""
-    -- [MENGGUNAKAN PATH AKURAT KAMU JUGA DISINI]
-    pcall(function()
-        local ws = LocalPlayer.PlayerGui.MatchUI.BottomUI.TopUI.WordSubmit
-        local frames = {}
-        for _, v in ipairs(ws:GetChildren()) do
-            if v:IsA("GuiObject") then table.insert(frames, v) end
-        end
-        table.sort(frames, function(a, b) return a.AbsolutePosition.X < b.AbsolutePosition.X end)
-        for _, w in ipairs(frames) do
-            local tl = w:IsA("TextLabel") and w or w:FindFirstChildWhichIsA("TextLabel", true)
-            if tl then
-                currentLiveWord = currentLiveWord .. tostring(tl.Text):lower():gsub("<[^>]+>", ""):gsub("[^a-z]", "")
-            end
-        end
-    end)
-    return currentLiveWord
 end
 
 -- ==========================================
@@ -495,63 +652,6 @@ local function GetWord(prefix)
 end
 
 -- ==========================================
--- ENGINE KETIK & SUBMIT (SILENT UI INJECTOR)
--- ==========================================
-local function SimulateTyping(text)
-    for i = 1, #text do
-        if not isRunning then break end 
-        local char = text:sub(i, i):upper()
-        local keyCode = Enum.KeyCode[char]
-        
-        if keyCode then
-            pcall(function()
-                VIM:SendKeyEvent(true, keyCode, false, game)
-                task.wait(0.01) 
-                VIM:SendKeyEvent(false, keyCode, false, game)
-            end)
-        end
-        
-        task.wait(SambungKataState.TypeSpeed) 
-    end
-end
-
-local function SimulateEnter()
-    pcall(function()
-        VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-        task.wait(0.01)
-        VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-    end)
-end
-
--- [PERBAIKAN: HAPUS 0 DETIK PAKSA, ANTI SKIP]
-local function SimulateBackspace()
-    pcall(function()
-        -- 1. Coba hajar tombol silang merah di layar kalau ada
-        pcall(function()
-            for _, v in ipairs(LocalPlayer.PlayerGui:FindFirstChild("MatchUI"):GetDescendants()) do
-                if (v:IsA("ImageButton") or v:IsA("TextButton")) then
-                    if v.BackgroundColor3 == Color3.fromRGB(255, 0, 0) or v.Name:lower():match("back") or v.Name:lower():match("del") then
-                        for _ = 1, 30 do
-                            if firesignal then firesignal(v.MouseButton1Click) end
-                        end
-                    end
-                end
-            end
-        end)
-        
-        -- 2. Backup spam VIM Backspace Brutal tanpa henti
-        for _ = 1, 30 do
-            VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
-            task.wait(0.01)
-            VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
-            task.wait(0.01)
-        end
-    end)
-end
-
-HapusBtn.MouseButton1Click:Connect(function() SimulateBackspace() end)
-
--- ==========================================
 -- LOGIC 2: MANUAL ASSIST MILLIONAIRE
 -- ==========================================
 local function HandleManualClick(word, prefix)
@@ -561,16 +661,19 @@ local function HandleManualClick(word, prefix)
     
     task.spawn(function()
         task.wait(0.1) 
-        
         local oldTurn, oldPrefix = GetTurnAndPrefix()
         
+        instantFailFlag = false 
+
         if SambungKataState.InstantMode and SubmitWordRemote then
             pcall(function() SubmitWordRemote:FireServer(word) end)
         else
             local restOfWord = word:sub(#prefix + 1)
             SimulateTyping(restOfWord)
-            task.wait(0.1)
-            SimulateEnter()
+            if not instantFailFlag then
+                task.wait(0.1)
+                SimulateEnter()
+            end
         end
         
         UsedWords[word] = true
@@ -582,17 +685,22 @@ local function HandleManualClick(word, prefix)
         
         while waitTimeout < 30 do
             task.wait(0.05) 
-            if not isRunning then break end
+            if not isRunning or not isTypingManual then break end 
+
+            if instantFailFlag then
+                isWrongWord = true
+                break
+            end
+
             waitTimeout = waitTimeout + 1
             local kbVisible = false
             local errorFound = false
             
             for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                if (v.Name == "A" and v.Parent and v.Parent.Name:find("Row") and v.Visible and v.AbsoluteSize.X > 0) or
-                   (v.Name == "CustomKeyboard" and v.Visible and v.AbsoluteSize.X > 0) then
+                if ((v.Name == "A" and v.Parent and v.Parent.Name:find("Row")) or v.Name == "CustomKeyboard") and IsTrulyVisible(v) then
                     kbVisible = true
                 end
-                if v.Name == "FeedbackLabel" and v:IsA("TextLabel") and v.Visible then
+                if v.Name == "FeedbackLabel" and v:IsA("TextLabel") and IsTrulyVisible(v) then
                     local txt = string.lower(v.Text)
                     if string.find(txt, "tidak ada") or string.find(txt, "salah") or string.find(txt, "coba") or string.find(txt, "sudah") or string.find(txt, "digunakan") then
                         errorFound = true
@@ -617,8 +725,7 @@ local function HandleManualClick(word, prefix)
             end
         end
         
-        if not turnPassed or isWrongWord then
-            -- [LANGSUNG HAPUS 0 DETIK SAAT SALAH DI MODE MANUAL]
+        if (not turnPassed or isWrongWord) and isTypingManual then
             UpdateIndicator("⚡ Salah! Ngebut hapus...", Color3.fromRGB(255, 50, 50), false)
             SimulateBackspace() 
         end
@@ -724,8 +831,6 @@ task.spawn(function()
         end
 
         local isMyTurn, prefix = GetTurnAndPrefix()
-
-        -- Ambil currentLiveWord pake path akurat yang kamu kasih
         local currentLiveWord = GetCurrentTypedWord()
         
         if #currentLiveWord > 0 then
@@ -739,12 +844,19 @@ task.spawn(function()
         
         if isMyTurn then
             if not SambungKataState.AutoPlay and prefix ~= "" then
-                local saran = GetSuggestions(prefix, 4)
-                UpdateIndicator("🟢 Giliran: KAMU\nHuruf Dasar Saat Ini: " .. prefix:upper(), Color3.fromRGB(0, 255, 100), saran)
+                local saran = GetSuggestions(prefix, 8)
+                UpdateIndicator("🟢 Giliran: " .. LocalPlayer.DisplayName .. "\nHuruf Dasar Saat Ini: " .. prefix:upper(), Color3.fromRGB(0, 255, 100), saran)
             end
         else
-            if prefix ~= "" then UpdateIndicator("⏳ Menunggu Giliranmu...\nHuruf Dasar Saat Ini: " .. prefix:upper(), Color3.fromRGB(200, 200, 200), false)
-            else UpdateIndicator("🔍 Menunggu match dimulai...", Color3.fromRGB(150, 150, 150), false) end
+            if prefix ~= "" then 
+                if not InfoSaran.Visible then
+                    UpdateIndicator("⏳ Menunggu Giliranmu...\nHuruf Dasar Saat Ini: " .. prefix:upper(), Color3.fromRGB(200, 200, 200), false)
+                else
+                    InfoText.Text = "⏳ Menunggu Giliranmu...\nHuruf Dasar Saat Ini: " .. prefix:upper()
+                end
+            else 
+                UpdateIndicator("🔍 Menunggu match dimulai...", Color3.fromRGB(150, 150, 150), false) 
+            end
         end
     end
 end)
@@ -765,21 +877,25 @@ task.spawn(function()
             
             local targetWord = GetWord(prefix)
             local restOfWord = targetWord:sub(#prefix + 1)
-            local saran = GetSuggestions(prefix, 4)
+            local saran = GetSuggestions(prefix, 8)
             
-            UpdateIndicator("🟢 Giliran: KAMU\nMemilih kata: " .. targetWord:upper(), Color3.fromRGB(0, 255, 100), saran)
+            UpdateIndicator("🟢 Giliran: " .. LocalPlayer.DisplayName .. "\nMemilih kata: " .. targetWord:upper(), Color3.fromRGB(0, 255, 100), saran)
             
             if not isRetry then task.wait(SambungKataState.Delay) end
 
             local oldTurn, oldPrefix = GetTurnAndPrefix()
+            
+            instantFailFlag = false 
 
             if SambungKataState.InstantMode and SubmitWordRemote then
                 pcall(function() SubmitWordRemote:FireServer(targetWord) end)
                 task.wait(0.1) 
             else
                 SimulateTyping(restOfWord)
-                task.wait(0.1)
-                SimulateEnter()
+                if not instantFailFlag then
+                    task.wait(0.1)
+                    SimulateEnter()
+                end
             end
             
             UsedWords[targetWord] = true
@@ -791,17 +907,22 @@ task.spawn(function()
             
             while waitTimeout < 30 do
                 task.wait(0.05) 
-                if not isRunning then break end
+                if not isRunning or not isTypingManual then break end 
+
+                if instantFailFlag then
+                    isWrongWord = true
+                    break
+                end
+
                 waitTimeout = waitTimeout + 1
                 local kbVisible = false
                 local errorFound = false
                 
                 for _, v in ipairs(LocalPlayer.PlayerGui:GetDescendants()) do
-                    if (v.Name == "A" and v.Parent and v.Parent.Name:find("Row") and v.Visible and v.AbsoluteSize.X > 0) or
-                       (v.Name == "CustomKeyboard" and v.Visible and v.AbsoluteSize.X > 0) then
+                    if ((v.Name == "A" and v.Parent and v.Parent.Name:find("Row")) or v.Name == "CustomKeyboard") and IsTrulyVisible(v) then
                         kbVisible = true
                     end
-                    if v.Name == "FeedbackLabel" and v:IsA("TextLabel") and v.Visible then
+                    if v.Name == "FeedbackLabel" and v:IsA("TextLabel") and IsTrulyVisible(v) then
                         local txt = string.lower(v.Text)
                         if string.find(txt, "tidak ada") or string.find(txt, "salah") or string.find(txt, "coba") or string.find(txt, "sudah") or string.find(txt, "digunakan") then
                             errorFound = true
@@ -827,11 +948,10 @@ task.spawn(function()
                 end
             end
             
-            if not turnPassed or isWrongWord then
-                -- [LANGSUNG HAPUS 0 DETIK SAAT SALAH TANPA NUNGGU]
+            if (not turnPassed or isWrongWord) and isTypingManual == false then
                 UpdateIndicator("⚡ Salah! Ngebut hapus...", Color3.fromRGB(255, 50, 50), saran)
                 SimulateBackspace()
-                isRetry = true 
+                isRetry = true  
             else
                 isRetry = false
             end
@@ -935,7 +1055,7 @@ local MainSection = MainTab:AddSection({ Title = "🔥 Auto Sambung Kata (Univer
 
 MainSection:AddToggle({Text = "🤖 Mode AutoPlay ", Default = false, Callback = function(v) SambungKataState.AutoPlay = v end})
 MainSection:AddToggle({Text = "⚡ Mode Instan (Bypass Ngetik)", Default = false, Callback = function(v) SambungKataState.InstantMode = v end})
-MainSection:AddToggle({Text = "🖱️ Legit", Default = false, Callback = function(v) SambungKataState.ShowSuggestUI = v end})
+MainSection:AddToggle({Text = "🖱️ Mode Normal", Default = false, Callback = function(v) SambungKataState.ShowSuggestUI = v end})
 MainSection:AddToggle({Text = "😈 Mode Gacor (Akhiran Susah)", Default = false, Callback = function(v) SambungKataState.HardMode = v end})
 MainSection:AddToggle({Text = "☠️ Mode Simple (Auto jawab huruf dasar)", Default = false, Callback = function(v) SambungKataState.KillMode = v end})
 MainSection:AddToggle({Text = "📊 Tampilkan Panel Info", Default = false, Callback = function(v) 
@@ -978,4 +1098,4 @@ ConfigSection:AddButton({Text = "❌ Tutup & Hapus Loader", Callback = function(
     if LocalPlayer:FindFirstChild("PlayerGui") then WipeUI(LocalPlayer.PlayerGui) end
 end})
 
-Window:Toast({Title = "MIGII HUB", Message = "Memuat Script ORI \nFix 0 Detik & Path Akurat", Duration = 4, Type = "Success"})
+Window:Toast({Title = "MIGII HUB", Message = "UI Live Panel Diperbesar ✅", Duration = 4, Type = "Success"})
